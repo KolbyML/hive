@@ -100,6 +100,14 @@ dyn_async! {
             (content_key, content_value)
         }).collect();
 
+        let test_data_65_headers: Vec<(HistoryContentKey, HistoryContentValue)> = values.as_sequence().unwrap().iter().map(|value| {
+            let content_key: HistoryContentKey =
+                serde_yaml::from_value(value["content_key"].clone()).unwrap();
+            let raw_content_value = Bytes::from_str(value["content_value"].as_str().unwrap()).unwrap();
+            let content_value = HistoryContentValue::decode(&content_key, raw_content_value.as_ref()).expect("unable to decode content value");
+            (content_key, content_value)
+        }).collect();
+
         // Iterate over all possible pairings of clients and run the tests (including self-pairings)
         for (client_a, client_b) in clients.iter().cartesian_product(clients.iter()) {
             for ProcessedContent { content_type, block_number, test_data } in process_content(content.clone()) {
@@ -180,6 +188,19 @@ dyn_async! {
             test.run(
                 NClientTestSpec {
                     name: format!("GOSSIP blocks from A:{} --> B:{}", client_a.name, client_b.name),
+                    description: "".to_string(),
+                    always_run: false,
+                    run: test_gossip_two_nodes,
+                    environments: None,
+                    test_data: content.clone(),
+                    clients: vec![client_a.clone(), client_b.clone()],
+                }
+            ).await;
+
+            // Test if node A can offer 64 headers to node B in 1 offer message
+            test.run(
+                NClientTestSpec {
+                    name: format!("Offer 64 headers from 1 offer message from A:{} --> B:{}", client_a.name, client_b.name),
                     description: "".to_string(),
                     always_run: false,
                     run: test_gossip_two_nodes,
@@ -576,6 +597,50 @@ dyn_async! {
 
         if !result.is_empty() {
             panic!("Client B: {:?}", result);
+        }
+    }
+}
+
+dyn_async! {
+    async fn test_offer_64_headers<'a> (clients: Vec<Client>, test_data: TestData) {
+        let (client_a, client_b) = match clients.iter().collect_tuple() {
+            Some((client_a, client_b)) => (client_a, client_b),
+            None => {
+                panic!("Unable to get expected amount of clients from NClientTestSpec");
+            }
+        };
+        if let Some((optional_key, optional_value)) = test_data.get(1).cloned() {
+            match client_b.rpc.store(optional_key, optional_value.encode()).await {
+                Ok(result) => if !result {
+                    panic!("Unable to store optional content for recursive find content");
+                },
+                Err(err) => {
+                    panic!("Error storing optional content for recursive find content: {err:?}");
+                }
+            }
+        }
+        let (target_key, target_value) = test_data.first().cloned().expect("Target content is required for this test");
+
+        let target_enr = match client_b.rpc.node_info().await {
+            Ok(node_info) => node_info.enr,
+            Err(err) => {
+                panic!("Error getting node info: {err:?}");
+            }
+        };
+
+        let _ = client_a.rpc.offer(target_enr, target_key.clone(), target_value.encode()).await;
+
+        tokio::time::sleep(Duration::from_secs(8)).await;
+
+        match client_b.rpc.local_content(target_key).await {
+            Ok(possible_content) => {
+                if possible_content != target_value.encode() {
+                    panic!("Error receiving content: Expected content: {target_value:?}, Received content: {possible_content:?}");
+                }
+            }
+            Err(err) => {
+                panic!("Unable to get received content: {err:?}");
+            }
         }
     }
 }

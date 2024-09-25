@@ -31,6 +31,7 @@ RUN apt update && apt install wget -y
 
 # copy build artifacts from build stage
 COPY --from=builder /portal/target/release/portal .
+ADD https://raw.githubusercontent.com/ethereum/portal-spec-tests/3ada846cd88369c72a5bf4f0c88651fb4842b929/tests/mainnet/history/hive/65headers.yml ./test-data/65headers.yml
 ADD https://raw.githubusercontent.com/ethereum/portal-spec-tests/master/tests/mainnet/history/hive/test_data_collection_of_forks_blocks.yaml ./test-data/test_data_collection_of_forks_blocks.yaml
 ADD https://raw.githubusercontent.com/ethereum/portal-spec-tests/master/tests/mainnet/state/hive/test_data.yaml ./test-data/state_test_data.yaml
 ADD https://raw.githubusercontent.com/ethereum/portal-spec-tests/master/tests/mainnet/beacon_chain/hive/test_data.yaml ./test-data/beacon_test_data.yaml
