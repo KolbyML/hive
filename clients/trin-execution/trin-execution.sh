@@ -53,7 +53,7 @@ esac
 # Create the data directory.
 DATADIR="/trin-execution-hive-datadir"
 mkdir $DATADIR
-FLAGS="$FLAGS --data-dir $DATADIR"
+FLAGS="$FLAGS --data-dir $DATADIR --save-blocks"
 
 # TODO If a specific network ID is requested, use that
 #if [ "$HIVE_NETWORK_ID" != "" ]; then
